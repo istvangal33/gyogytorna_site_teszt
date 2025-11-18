@@ -68,3 +68,96 @@ To learn more about Next.js, take a look at the following resources:
 - [Next.js Static Export](https://nextjs.org/docs/app/building-your-application/deploying/static-exports) - documentation on static exports
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Contact Form Setup
+
+The contact form requires additional configuration to work properly with the PHP backend.
+
+### Prerequisites
+
+- PHP 7.4 or higher
+- PHPMailer library (optional but recommended)
+- Google reCAPTCHA v2 site key and secret key
+
+### Configuration Steps
+
+1. **Copy the configuration template:**
+   ```bash
+   cp public/config.example.php public/config.php
+   ```
+
+2. **Edit `public/config.php` with your credentials:**
+   - SMTP settings (email server details)
+   - reCAPTCHA secret key
+   - Admin email address where form submissions will be sent
+   
+   **Important:** Never commit `config.php` to version control as it contains sensitive credentials.
+
+3. **Set up reCAPTCHA:**
+   - Register your site at [Google reCAPTCHA](https://www.google.com/recaptcha/admin)
+   - Choose reCAPTCHA v2 ("I'm not a robot" checkbox)
+   - Add your domain to the authorized domains
+   - Copy the site key and secret key
+   - Add the site key to your environment variables or Next.js config
+   - Add the secret key to `public/config.php`
+
+4. **Install PHPMailer (recommended):**
+   ```bash
+   cd public
+   composer require phpmailer/phpmailer
+   ```
+   
+   Or manually download PHPMailer and place it in the `public/PHPMailer/` directory.
+
+5. **Configure file upload directory:**
+   - The default upload directory is `public/uploads/`
+   - Ensure the web server has write permissions: `chmod 755 public/uploads/`
+   - This directory is automatically created by the script if it doesn't exist
+
+6. **Environment variable for reCAPTCHA site key:**
+   Create a `.env.local` file in the project root:
+   ```
+   NEXT_PUBLIC_RECAPTCHA_SITE_KEY=your-site-key-here
+   ```
+
+### Security Features
+
+The contact form includes several security measures:
+
+- **reCAPTCHA validation** - Prevents automated spam submissions
+- **Honeypot field** - Hidden field to catch bots
+- **Input sanitization** - All user inputs are sanitized to prevent XSS attacks
+- **File type validation** - Only allows PDF and compressed files
+- **File size limits** - Maximum 10MB per file
+- **Email validation** - Validates email format
+- **Phone validation** - Validates Hungarian phone number format
+- **Secure configuration** - Sensitive credentials stored outside version control
+
+### Testing the Contact Form
+
+After configuration:
+
+1. Start the development server: `npm run dev`
+2. Navigate to the contact section
+3. Fill out the form with valid data
+4. Complete the reCAPTCHA challenge
+5. Submit the form
+6. Check the admin email inbox for the submission
+
+### Troubleshooting
+
+**Form submission fails:**
+- Check that `config.php` exists and has correct credentials
+- Verify reCAPTCHA keys are correct
+- Check PHP error logs for detailed error messages
+- Ensure SMTP settings are correct
+
+**Files not uploading:**
+- Check that `public/uploads/` directory exists and is writable
+- Verify file size is under 10MB
+- Ensure file type is PDF, ZIP, RAR, or 7Z
+
+**reCAPTCHA not working:**
+- Verify the site key matches the domain
+- Check that the secret key is correct in `config.php`
+- Ensure the domain is authorized in Google reCAPTCHA console

@@ -214,6 +214,13 @@ export default function ContactSection() {
                 aria-hidden="true"
               />
 
+              {/* Hidden field for reCAPTCHA token - required by PHP backend */}
+              <input
+                type="hidden"
+                name="g-recaptcha-response"
+                value={captchaToken || ''}
+              />
+
               <div>
                 <label htmlFor="name" className="block text-xs sm:text-sm font-medium text-slate-800 mb-1">
                   Teljes név <span className="text-red-500">*</span>
