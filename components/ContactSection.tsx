@@ -1,0 +1,445 @@
+'use client';
+
+import React, { useState } from 'react';
+import ReCAPTCHA from "react-google-recaptcha";
+
+const BRAND_PRIMARY = 'var(--color-brand-primary, #004A6D)';
+const BRAND_ACCENT = 'var(--color-brand-accent, #EC7007)';
+
+const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!;
+
+const cls = (...parts: Array<string | false | undefined>) => parts.filter(Boolean).join(' ');
+function validateEmail(email: string) {
+  const emailRegex =
+    /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|hu|net|org|edu|gov|co\.uk|de|fr|es|it|pl|cz|sk|ro|bg|hr|si|at|ch)$/i;
+  return emailRegex.test(email);
+}
+function validateHungarianPhone(phone: string) {
+  const c = phone.replace(/[\s-]/g, '');
+  const patterns = [
+    /^\+3620\d{7}$/, /^\+3630\d{7}$/, /^\+3631\d{7}$/, /^\+3670\d{7}$/,
+    /^\+361\d{7}$/, /^\+36\d{2}\d{6}$/,
+  ];
+  return patterns.some((p) => p.test(c));
+}
+
+function validateFileType(file: File): boolean {
+  const allowedTypes = [
+    'application/pdf',
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/x-rar-compressed',
+    'application/x-7z-compressed',
+  ];
+  const allowedExtensions = ['.pdf', '.zip', '.rar', '.7z'];
+  
+  const fileName = file.name.toLowerCase();
+  const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
+  const hasValidMimeType = allowedTypes.includes(file.type);
+  
+  return hasValidExtension || hasValidMimeType;
+}
+
+function validateFileSize(file: File, maxSizeMB: number = 10): boolean {
+  const maxSizeBytes = maxSizeMB * 1024 * 1024;
+  return file.size <= maxSizeBytes;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+export default function ContactSection() {
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    email: '', 
+    phone: '', 
+    message: '', 
+    website: '' 
+  });
+  const [files, setFiles] = useState<File[]>([]);
+  const [errors, setErrors] = useState<{ [k: string]: string }>({});
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  const inputBase = 'w-full px-3 py-2 rounded-md border bg-white text-gray-900 text-sm placeholder:text-slate-400 outline-none transition-shadow';
+  const inputBorder = 'border-slate-300';
+  const inputFocus = 'focus:ring-2 focus:ring-[color:var(--color-brand-primary,#004A6D)] focus:border-[color:var(--color-brand-primary,#004A6D)]';
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const selectedFiles = Array.from(e.target.files);
+    const validFiles: File[] = [];
+    const fileErrors: string[] = [];
+
+    selectedFiles.forEach(file => {
+      if (!validateFileType(file)) {
+        fileErrors.push(`${file.name}: Csak PDF és tömörített fájlok engedélyezettek`);
+        return;
+      }
+      if (!validateFileSize(file, 10)) {
+        fileErrors.push(`${file.name}: Maximum 10 MB méret engedélyezett`);
+        return;
+      }
+      validFiles.push(file);
+    });
+
+    if (fileErrors.length > 0) {
+      setErrors(prev => ({ ...prev, files: fileErrors.join('; ') }));
+    } else {
+      setErrors(prev => {
+        const { files, ...rest } = prev;
+        return rest;
+      });
+    }
+    setFiles(prev => [...prev, ...validFiles]);
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const validateForm = () => {
+    const n: { [k: string]: string } = {};
+    if (formData.website) n.form = 'Érvénytelen beküldés.';
+    if (formData.name.trim().length < 2) n.name = 'A név legalább 2 karakter';
+    if (!validateEmail(formData.email)) n.email = 'Érvényes email szükséges';
+    if (!validateHungarianPhone(formData.phone)) n.phone = 'Érvényes magyar telefonszám (+3630...)';
+    if (!captchaToken) n.captcha = 'Igazolja, hogy nem robot';
+
+
+    setErrors(n);
+
+    const firstKey = Object.keys(n)[0];
+    if (firstKey && typeof window !== 'undefined') {
+      const el = document.getElementById(firstKey === 'form' ? 'name' : firstKey);
+      el?.focus();
+    }
+    return Object.keys(n).length === 0;
+  };
+
+  if (submitted) {
+    return (
+      <section className="py-16 sm:py-20 bg-gradient-to-br from-[#0F1F28]/5 to-[#0B1620]/10 scroll-mt-[160px]" id="contact">
+        <div className="max-w-md sm:max-w-xl mx-auto px-4">
+          <div
+            className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-8 sm:p-10 text-center border"
+            style={{ border: `1px solid color-mix(in srgb, #0F1F28 15%, transparent)` } as React.CSSProperties}
+          >
+            <div className="w-16 h-16 bg-gradient-to-r from-[#0F1F28] to-[#0B1620] rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0F1F28] mb-3">
+              Köszönjük a megkeresést!
+            </h2>
+            <p className="text-base sm:text-lg text-[#0F1F28]/70 mb-6">
+              Hamarosan kapcsolatba lépünk Önnel.
+            </p>
+            <button
+              onClick={() => {
+                setSubmitted(false);
+                setFormData({ name: '', email: '', phone: '', message: '', website: '' });
+                setFiles([]);
+                setCaptchaToken(null);
+                setErrors({});
+              }}
+              className="group relative inline-flex items-center gap-3 px-7 py-3 rounded-2xl font-semibold
+                        text-white hover:text-white
+                        bg-gradient-to-r from-[#0F1F28] to-[#0B1620]
+                        border border-[#0F1F28]/20
+                        shadow-[0_6px_18px_rgba(15,31,40,0.25)]
+                        hover:shadow-[0_10px_32px_rgba(15,31,40,0.35)]
+                        transition-all duration-300
+                        hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <span className="pointer-events-none absolute inset-0 -z-10 rounded-2xl opacity-0
+                              group-hover:opacity-100 transition-opacity duration-300
+                              bg-[radial-gradient(120%_120%_at_50%_50%,rgba(15,31,40,0.1),transparent_60%)]" />
+              Új üzenet
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-[#FFF] via-[#0d1b24] to-[#0f1f29] scroll-mt-[160px] lg:scroll-mt-[90px]"
+      id="contact"
+    >
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="text-center mb-10 sm:mb-14">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 text-white">
+            Kapcsolatfelvétel
+          </h2>
+          <p className="text-sm sm:text-base md:text-lg text-white max-w-2xl mx-auto leading-relaxed">
+            Töltse ki az alábbi űrlapot, és hamarosan felvesszük Önnel a kapcsolatot.
+          </p>
+        </div>
+
+        <div className="flex justify-center">
+          <div
+            className="bg-white w-full max-w-sm sm:max-w-md md:max-w-2xl rounded-2xl p-4 sm:p-6 md:p-8 shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
+            style={{ border: `1px solid color-mix(in srgb, ${BRAND_PRIMARY} 18%, transparent)` } as React.CSSProperties}
+          >
+            <form 
+              action="/contact.php" 
+              method="POST" 
+              encType="multipart/form-data" 
+              className="space-y-4" 
+              noValidate
+              onSubmit={e => {
+                if (!validateForm()) {
+                  e.preventDefault();
+                } else {
+                  setSubmitted(true);
+                }
+              }}
+            >
+              <input
+                type="text"
+                name="website"
+                value={formData.website}
+                onChange={e => setFormData(f => ({ ...f, website: e.target.value }))}
+                className="hidden"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+              />
+
+              <div>
+                <label htmlFor="name" className="block text-xs sm:text-sm font-medium text-slate-800 mb-1">
+                  Teljes név <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  required
+                  minLength={2}
+                  maxLength={50}
+                  value={formData.name}
+                  onChange={e => setFormData(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Kovács János"
+                  className={cls(
+                    inputBase,
+                    errors.name ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : `${inputBorder} ${inputFocus}`
+                  )}
+                  aria-invalid={!!errors.name}
+                  aria-describedby={errors.name ? 'name-error' : undefined}
+                  autoComplete="name"
+                />
+                {errors.name && <p id="name-error" className="text-[11px] text-red-600 mt-1">{errors.name}</p>}
+              </div>
+
+              <div>
+                <label htmlFor="email" className="block text-xs sm:text-sm font-medium text-slate-800 mb-1">
+                  Email cím <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  required
+                  value={formData.email}
+                  onChange={e => setFormData(f => ({ ...f, email: e.target.value }))}
+                  placeholder="pelda@email.com"
+                  className={cls(
+                    inputBase,
+                    errors.email ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : `${inputBorder} ${inputFocus}`
+                  )}
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? 'email-error' : undefined}
+                  autoComplete="email"
+                  inputMode="email"
+                />
+                {errors.email && <p id="email-error" className="text-[11px] text-red-600 mt-1">{errors.email}</p>}
+              </div>
+
+              <div>
+                <label htmlFor="phone" className="block text-xs sm:text-sm font-medium text-slate-800 mb-1">
+                  Telefonszám <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  required
+                  value={formData.phone}
+                  onChange={e => setFormData(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="+36301234567"
+                  maxLength={13}
+                  className={cls(
+                    inputBase,
+                    'tracking-wide',
+                    errors.phone ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : `${inputBorder} ${inputFocus}`
+                  )}
+                  aria-invalid={!!errors.phone}
+                  aria-describedby={errors.phone ? 'phone-error' : 'phone-help'}
+                  autoComplete="tel"
+                  inputMode="tel"
+                />
+                <p id="phone-help" className="text-[10px] text-slate-500 mt-1">Formátum: +36301234567</p>
+                {errors.phone && <p id="phone-error" className="text-[11px] text-red-600 mt-1">{errors.phone}</p>}
+              </div>
+
+              <div>
+                <label htmlFor="message" className="block text-xs sm:text-sm font-medium text-slate-800 mb-1">
+                  Üzenet
+                </label>
+                <textarea
+                  id="message"
+                  name="message"
+                  rows={3}
+                  maxLength={500}
+                  value={formData.message}
+                  onChange={e => setFormData(f => ({ ...f, message: e.target.value }))}
+                  placeholder="Miben segíthetünk?"
+                  className={`${inputBase} ${inputBorder} ${inputFocus} min-h-[100px] resize-y`}
+                  aria-describedby="message-count"
+                />
+                <div id="message-count" className="text-[10px] text-slate-500 text-right mt-1">
+                  {formData.message.length}/500
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="file-upload" className="block text-xs sm:text-sm font-medium text-slate-800 mb-1">
+                  Dokumentumok csatolása
+                </label>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="file-upload"
+                    className={cls(
+                      'flex flex-col items-center justify-center w-full px-4 py-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors',
+                      errors.files 
+                        ? 'border-red-300 bg-red-50 hover:bg-red-100' 
+                        : 'border-slate-300 bg-slate-50 hover:bg-slate-100'
+                    )}
+                    style={{
+                      borderColor: errors.files 
+                        ? undefined 
+                        : `color-mix(in srgb, ${BRAND_PRIMARY} 30%, transparent)`
+                    } as React.CSSProperties}
+                  >
+                    <svg
+                      className="w-8 h-8 mb-2"
+                      style={{ color: errors.files ? '#ef4444' : BRAND_PRIMARY } as React.CSSProperties}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                      />
+                    </svg>
+                    <p className="text-xs sm:text-sm text-slate-600 text-center">
+                      <span className="font-semibold">Kattintson a tallózáshoz</span> vagy húzza ide a fájlokat
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-1 text-center">
+                      PDF és tömörített fájlok (ZIP, RAR, 7Z) • Max. 10 MB/fájl
+                    </p>
+                    <input
+                      id="file-upload"
+                      name="documents[]"
+                      type="file"
+                      multiple
+                      accept=".pdf,.zip,.rar,.7z,application/pdf,application/zip,application/x-rar-compressed,application/x-7z-compressed"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      aria-describedby={errors.files ? 'files-error' : 'files-help'}
+                    />
+                  </label>
+                  
+                  {errors.files && (
+                    <p id="files-error" className="text-[11px] text-red-600">{errors.files}</p>
+                  )}
+
+                  {files.length > 0 && (
+                    <div className="space-y-2 mt-3">
+                      {files.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-2 rounded-md bg-slate-50 border border-slate-200"
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <svg
+                              className="w-5 h-5 flex-shrink-0"
+                              style={{ color: BRAND_PRIMARY } as React.CSSProperties}
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                              aria-hidden="true"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-slate-700 truncate">{file.name}</p>
+                              <p className="text-[10px] text-slate-500">{formatFileSize(file.size)}</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="ml-2 p-1 text-slate-400 hover:text-red-600 transition-colors flex-shrink-0"
+                            aria-label={`${file.name} eltávolítása`}
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-slate-800 mb-2">
+                  Biztonsági ellenőrzés <span className="text-red-500">*</span>
+                </label>
+                <ReCAPTCHA
+                  sitekey={RECAPTCHA_SITE_KEY}
+                  onChange={(token: string | null) => setCaptchaToken(token)}
+                  theme="light" // vagy dark, ha sötét hátteret használsz
+                />
+                {errors.captcha && <p className="text-[11px] text-red-600 mt-1">{errors.captcha}</p>}
+              </div>
+
+
+              <button
+                type="submit"
+                disabled={false /* Submit állapot kezelése szükség szerint */}
+                className="btn btn--primary w-full flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Üzenet küldése
+              </button>
+
+              {errors.form && (
+                <p className="text-[11px] text-red-600 text-center">{errors.form}</p>
+              )}
+
+              <p className="text-[10px] text-slate-500 text-center">
+                <span className="text-red-500">*</span> Kötelező mezők
+              </p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
