@@ -6,7 +6,13 @@ import ReCAPTCHA from "react-google-recaptcha";
 const BRAND_PRIMARY = 'var(--color-brand-primary, #004A6D)';
 const BRAND_ACCENT = 'var(--color-brand-accent, #EC7007)';
 
-const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!;
+const RECAPTCHA_SITE_KEY = '6LdbUA8sAAAAAKlJd88B0nL2MBm0yQpSKJhFwpCv';
+
+declare global {
+  interface Window {
+    grecaptcha: any;
+  }
+}
 
 const cls = (...parts: Array<string | false | undefined>) => parts.filter(Boolean).join(' ');
 function validateEmail(email: string) {
@@ -65,6 +71,7 @@ export default function ContactSection() {
   const [errors, setErrors] = useState<{ [k: string]: string }>({});
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const inputBase = 'w-full px-3 py-2 rounded-md border bg-white text-gray-900 text-sm placeholder:text-slate-400 outline-none transition-shadow';
   const inputBorder = 'border-slate-300';
@@ -101,6 +108,44 @@ export default function ContactSection() {
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    const formElement = e.target as HTMLFormElement;
+    const formData = new FormData(formElement);
+
+    try {
+      const response = await fetch('/contact.php', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSubmitted(true);
+        setFormData({ name: '', email: '', phone: '', message: '', website: '' });
+        setFiles([]);
+        setCaptchaToken(null);
+        // reCAPTCHA reset
+        if (typeof window !== 'undefined' && window.grecaptcha) {
+          window.grecaptcha.reset();
+        }
+      } else {
+        setErrors({ form: data.message || 'Hiba történt az üzenet küldése során.' });
+      }
+    } catch (error) {
+      setErrors({ form: 'Hálózati hiba. Kérjük, próbálja újra később.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const validateForm = () => {
@@ -190,18 +235,10 @@ export default function ContactSection() {
             style={{ border: `1px solid color-mix(in srgb, ${BRAND_PRIMARY} 18%, transparent)` } as React.CSSProperties}
           >
             <form 
-              action="/contact.php" 
-              method="POST" 
+              onSubmit={handleSubmit}
               encType="multipart/form-data" 
               className="space-y-4" 
               noValidate
-              onSubmit={e => {
-                if (!validateForm()) {
-                  e.preventDefault();
-                } else {
-                  setSubmitted(true);
-                }
-              }}
             >
               <input
                 type="text"
@@ -430,10 +467,10 @@ export default function ContactSection() {
 
               <button
                 type="submit"
-                disabled={false /* Submit állapot kezelése szükség szerint */}
+                disabled={isSubmitting}
                 className="btn btn--primary w-full flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Üzenet küldése
+                {isSubmitting ? 'Küldés...' : 'Üzenet küldése'}
               </button>
 
               {errors.form && (
